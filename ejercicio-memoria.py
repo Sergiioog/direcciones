@@ -24,10 +24,11 @@
 
 Para cada memoria el programa mostrará si ha habido acierto o fallo, teniendo que verse en la
 ejecución ejemplos de ambos casos. '''
+import json
+import os
 import numpy as np
 from pprint import pprint
-import os
-
+import random
 
 
 directionsBus: int = 2**8  # 256 direcciones.
@@ -57,33 +58,28 @@ rutaArchivo : str = os.path.join(os.getcwd(), "ficheros", "direcciones.txt")
 lineCount : int = 0
 wordCount : int = 0
 
-for _ in range(directionsBus):
-    line = {
-        'label':  bin(lineCount)[2:].zfill(5),  # valor inicial para etiqueta
-        'lines': [
-            {f'word{wordCount}': [{'block': '0'} for _ in range(num_blocks)]}
-            for wordCount in range(0,4)
-        ]
-    }
-    cachedMemory.append(line)
-    lineCount += 1
 
-#9) El programa debe simular la actuación de la caché, recibiendo una dirección hexadecimal del primer fichero de texto, verificando en la línea correspondiente
-#   si la etiqueta de la caché coincide con la de la memoria ( caso de hit o acierto de caché) o si no coincide.
+with open("memdirections.json", "r") as file:
+    memdirections : dict = json.load(file)
+
 
 def checkHexDirection(hexDir:str):
     hexDirBinary = bin(int(hexDir, 16))[2:].zfill(16) #Convertimos a hexadecimal (16 bits)
     etiqueta_dir = hexDirBinary[:5]  # Cogemos la etiqueta (primeros 5 bits)
 
-    for line in cachedMemory:
+    for line in memdirections:
         etiqueta_mem = line['label']  # Accedemos al diccionario
-        if(etiqueta_mem == etiqueta_dir):
-            print(">>> Coinciden")
-        print("Datos:", {
-            "EtiquetaMemoria": etiqueta_mem,
-            "EtiquetaDireccion": etiqueta_dir,
-            "Coincide": etiqueta_mem == etiqueta_dir
-        })
+        if etiqueta_mem[:5] == etiqueta_dir:
+            #Revisar por que:
+            for l in line['lines']:
+                word_key = list(l.keys())[0]  # obtener la clave de la palabra, ej. '1111'
+                blocks = l[word_key]  # lista de bloques
+                for block in blocks:
+                    if f"{etiqueta_mem}{word_key}{block['block']}" == hexDirBinary:
+                        print(f"{etiqueta_mem}{word_key}{block['block']}")
+       # else:
+           # print(">>> Miss: ", etiqueta_mem[:5], etiqueta_dir)
+
 
 
 #Leemos del fichero con las direcciones cargadas
@@ -95,12 +91,3 @@ with open(rutaArchivo, "r") as file:
 with open("filebin.bin","wb") as f:
     f.write(b'\x00\x01\x02\x03\x04')  # 5 bytes: 00 01 02 03 04
 
-
-# Comprobamos
-pprint(cachedMemory)
-
-
-
-
-
-'''print(f"Memoria caché: ", cachedMemory)'''
