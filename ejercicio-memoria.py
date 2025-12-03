@@ -27,91 +27,71 @@ ejecución ejemplos de ambos casos. '''
 
 import json
 import os
-from pprint import pprint
-#--------------------------
+
 '''
-Bus de direcciones:
-Vamos a usar 8 bits → 28=2562^8 = 25628=256 direcciones.
-Esto es muy pequeño, pero suficiente para practicar.
-Bloques por línea (tamaño del bloque):
-Usamos 4 palabras por bloque → desplazamiento = log₂(4) = 2 bits.
-Número de líneas en la caché:
-Usamos 16 líneas → índice = log₂(16) = 4 bits.
-
-Bits dirección = 8 bits (porque el bus es de 256 direcciones).
-Bits desplazamiento = 2 bits (por 4 palabras por bloque).
-Bits índice = 4 bits (por 16 líneas en la caché).
-Bits etiqueta =
-8−(4+2)=2 bits8 - (4 + 2) = 2 \text{ bits}8−(4+2)=2 bits
+    - Palabra (desplazamiento): 4 bits → bloques de 16 palabras.
+    - Índice (línea de caché): 4 bits → 16 líneas en la caché.
+    - Etiqueta: 8 bits
 '''
-
-
 
 rutaArchivo : str = os.path.join(os.getcwd(), "ficheros", "direcciones.txt")
 
-with open("memdirections.json", "r") as file:
+with open("memdirections.json", "r") as file: #Leemos el json precargado y almacenamos su valor en memdirections
     memdirections : dict = json.load(file)
 
 
 def checkHexDirection(hexDir:str):
-    directionFound: bool = False
-    directionWritten : bool = False
-    hexDirBinary = bin(int(hexDir, 16))[2:].zfill(16) #Convertimos a hexadecimal (16 bits)
-    etiqueta_dir = hexDirBinary[:5]  # Cogemos la etiqueta (primeros 5 bits)
-
+    directionFound: bool = False #Flag que utilizaremos para buscar la direccion en caso de que no esté en caché
+    hexDirBinary = bin(int(hexDir, 16))[2:].zfill(16) #Convertimos a hexadecimal (16 bits) y rellenamos
+    etiqueta_dir = hexDirBinary[:8]  #Cogemos la etiqueta (primeros 8 bits)
     for line in memdirections:
-        etiqueta_mem = line['label']  # Accedemos al diccionario
-        if etiqueta_mem[:5] == etiqueta_dir:
-            #Revisar por que:
+        etiqueta_mem = line['label']  #Recorremos el json y cogemos el valor de label
+        if etiqueta_mem[:8] == etiqueta_dir: #Comparamos la etiqueta de la dirección con la etiqueta a buscar
             for l in line['lines']:
-                word_key = list(l.keys())[0]  # obtener la clave de la palabra, ej. '1111'
-                blocks = l[word_key]  # lista de bloques
+                word_key = list(l.keys())[0]  # Obtener la linea ('0000','0001' etc...)
+                blocks = l[word_key]  #Rescatamos los bloques y los recorremos
                 for block in blocks:
-                    if f"{etiqueta_mem}{word_key}{block['block']}" == hexDirBinary:
+                    if f"{etiqueta_mem}{word_key}{block['block']}" == hexDirBinary: #Comparamos todos los valores concatenados a la direccion en binario
                         print(f"Encontrado con éxito: {etiqueta_mem}{word_key}{block['block']}")
                         directionFound = True
 
 
-    if directionFound == False:
+    if directionFound == False: #Si no lo hemos encontrado en caché
         print("No se ha encontrado el elemento, buscándolo...")
-        with open("filebin.bin", "rb") as f:
+        with open("filebin.bin", "rb") as f: #Leemos el fichero binario (al que previamente le habremos insertado la direccion a buscar)
 
-            data = f.read(2)  # lee 2 bytes
-            numero = int.from_bytes(data, "big")  # o "little"
+            data = f.read(2)  #Leemos dos bytes
+            numero = int.from_bytes(data, "big")  #Rescatamos el numero en cuestion
 
-            for line in memdirections:  # Recorremos cada entrada del JSON
-                if line["label"] == "00000000":  # 1) buscar el label
+            for line in memdirections:  #Recorremos cada entrada del JSON
+                if line["label"] == "00000000":  #Buscamos la entrada 00000000, (explicación)
 
-                    newNumber = bin(numero)[2:].zfill(16)  # '1010101111001101' ejemplo
-                    newLabel = newNumber[:8]  # primeros 8 bits
-                    word = newNumber[8:12]  # los 4 bits siguientes
-                    block = newNumber[12:]  # los últimos 4 bits
+                    newNumber = bin(numero)[2:].zfill(16)  # Convertimos a binario el numero del fichero
+                    newLabel = newNumber[:8]  # primeros 8 bits (etiqueta)
+                    word = newNumber[8:12]  # los 4 bits siguientes (linea)
+                    block = newNumber[12:]  # los últimos 4 bits (palabra)
 
-                    print(">>>", line["label"], line["lines"][-1], line["lines"][-1]["0000"][0]["block"])
-                    print(">>>", newNumber, newLabel, word, block)
+                    last_line = line["lines"][-1]  #Sobrescribir los bloques de la palabra correspondiente en la última posición de lines
+                    line["label"] = newLabel #Le damos el valor de newLabel
 
-
-                    # sobrescribir los bloques de la palabra correspondiente en la última posición de lines
-                    last_line_dict = line["lines"][-1]
-                    line["label"] = newLabel
-
-                    # sobrescribir todos los bloques REALIZAR PEQUEÑOS AJUSTES
-                    for i, blk in enumerate(last_line_dict["0000"]):
-                        last_line_dict["0000"][i]["block"] = block
+                    for i, blk in enumerate(last_line["0000"]): #Recorremos la linea
+                        last_value = last_line["0000"]   #Guardamos la clave antes de eliminarla para no causar errores
+                        del last_line["0000"]
+                        last_line[word] = last_value #Sobreescribimos con el valor de word
+                        last_line[word][i]["block"] = block #Actualizamos el valor del bloque correspondiente
                         break
 
-        with open("memdirections.json", "w") as f:
+        with open("memdirections.json", "w") as f: #Abrimos el json para escritura y le pasamos el json modificado
             json.dump(memdirections, f, indent=4)
 
 
+#Leemos el archivo de txt para encontrar la dirección que se quiere
 with open(rutaArchivo, "r") as file:
     for hexDirection in file:
         checkHexDirection(hexDirection)
 
-#Escribimos en el fichero binario:
+#Escribimos en el fichero binario para realización de pruebas de recuperación:
 '''with open("filebin.bin","wb") as f:
     f.write((0x081F).to_bytes(2, "big"))'''
-
-
 #f.write((0x081A).to_bytes(2, "big"))
 #f.write((0x081F).to_bytes(2, "big"))
