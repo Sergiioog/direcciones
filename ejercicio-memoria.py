@@ -24,15 +24,10 @@
 
 Para cada memoria el programa mostrará si ha habido acierto o fallo, teniendo que verse en la
 ejecución ejemplos de ambos casos. '''
+
 import json
 import os
-import numpy as np
 from pprint import pprint
-import random
-
-
-directionsBus: int = 2**8  # 256 direcciones.
-num_blocks: int = 4         # Bloques de 4 palabras
 #--------------------------
 '''
 Bus de direcciones:
@@ -52,18 +47,15 @@ Bits etiqueta =
 
 
 
-cachedMemory: list[dict] = []
 rutaArchivo : str = os.path.join(os.getcwd(), "ficheros", "direcciones.txt")
-#Contadores dinamicos
-lineCount : int = 0
-wordCount : int = 0
-
 
 with open("memdirections.json", "r") as file:
     memdirections : dict = json.load(file)
 
 
 def checkHexDirection(hexDir:str):
+    directionFound: bool = False
+    directionWritten : bool = False
     hexDirBinary = bin(int(hexDir, 16))[2:].zfill(16) #Convertimos a hexadecimal (16 bits)
     etiqueta_dir = hexDirBinary[:5]  # Cogemos la etiqueta (primeros 5 bits)
 
@@ -76,18 +68,50 @@ def checkHexDirection(hexDir:str):
                 blocks = l[word_key]  # lista de bloques
                 for block in blocks:
                     if f"{etiqueta_mem}{word_key}{block['block']}" == hexDirBinary:
-                        print(f"{etiqueta_mem}{word_key}{block['block']}")
-       # else:
-           # print(">>> Miss: ", etiqueta_mem[:5], etiqueta_dir)
+                        print(f"Encontrado con éxito: {etiqueta_mem}{word_key}{block['block']}")
+                        directionFound = True
 
 
+    if directionFound == False:
+        print("No se ha encontrado el elemento, buscándolo...")
+        with open("filebin.bin", "rb") as f:
 
-#Leemos del fichero con las direcciones cargadas
+            data = f.read(2)  # lee 2 bytes
+            numero = int.from_bytes(data, "big")  # o "little"
+
+            for line in memdirections:  # Recorremos cada entrada del JSON
+                if line["label"] == "00000000":  # 1) buscar el label
+
+                    newNumber = bin(numero)[2:].zfill(16)  # '1010101111001101' ejemplo
+                    newLabel = newNumber[:8]  # primeros 8 bits
+                    word = newNumber[8:12]  # los 4 bits siguientes
+                    block = newNumber[12:]  # los últimos 4 bits
+
+                    print(">>>", line["label"], line["lines"][-1], line["lines"][-1]["0000"][0]["block"])
+                    print(">>>", newNumber, newLabel, word, block)
+
+
+                    # sobrescribir los bloques de la palabra correspondiente en la última posición de lines
+                    last_line_dict = line["lines"][-1]
+                    line["label"] = newLabel
+
+                    # sobrescribir todos los bloques REALIZAR PEQUEÑOS AJUSTES
+                    for i, blk in enumerate(last_line_dict["0000"]):
+                        last_line_dict["0000"][i]["block"] = block
+                        break
+
+        with open("memdirections.json", "w") as f:
+            json.dump(memdirections, f, indent=4)
+
+
 with open(rutaArchivo, "r") as file:
     for hexDirection in file:
         checkHexDirection(hexDirection)
 
 #Escribimos en el fichero binario:
-with open("filebin.bin","wb") as f:
-    f.write(b'\x00\x01\x02\x03\x04')  # 5 bytes: 00 01 02 03 04
+'''with open("filebin.bin","wb") as f:
+    f.write((0x081F).to_bytes(2, "big"))'''
 
+
+#f.write((0x081A).to_bytes(2, "big"))
+#f.write((0x081F).to_bytes(2, "big"))
